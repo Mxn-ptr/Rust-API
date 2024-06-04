@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    ports:
+      - "9092:9092"
+    command:
+      - redpanda start --overprovisioned --smp 1 --memory 1G --reserve-memory 0M --node-id 0 --check=false
+
+  scylladb:
+    image: scylladb/scylla
+    ports:
+      - "9042:9042"
+    command: ["--smp", "1", "--memory", "1G", "--overprovisioned"]
