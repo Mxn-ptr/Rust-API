@@ -1,11 +1,11 @@
 use actix_web::web;
 
-use crate::handlers::user_handler::{check_api, create_user};
+use crate::handlers::user_handler::{create_user, get_users};
 
-pub fn init(cfg: &mut web::ServiceConfig) {
-	cfg.service(
-		web::scope("/users")
-			.route("", web::get().to(check_api))
-			.route("", web::post().to(create_user)),
-	);
+pub fn config(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/users")
+            .route(web::post().to(create_user))
+			.route(web::get().to(get_users))
+    );
 }

@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::models::user::User;
+use crate::models::user::UserResponse;
 
 #[derive(Serialize)]
 pub struct GenericResponse {
@@ -10,7 +10,7 @@ pub struct GenericResponse {
 
 #[derive(Serialize)]
 pub struct UserData {
-	pub user: User
+	pub user: UserResponse
 }
 
 #[derive(Serialize)]
@@ -19,8 +19,10 @@ pub struct SingleUserReponse {
 	pub data: UserData,
 }
 
+#[derive(Serialize)]
+
 pub struct UserListResponse {
 	pub status: String,
 	pub count: usize,
-	pub users: Vec<User>
+	pub users: Vec<UserResponse>
 }

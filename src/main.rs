@@ -1,6 +1,6 @@
 use actix_web::{App, HttpServer};
 use crate::config::db::create_session;
-use crate::routes::users::init;
+use crate::routes::general::config_routes;
 
 mod routes;
 mod config;
@@ -18,7 +18,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(session.clone())
-            .configure(init)
+            .configure(config_routes)
 
     })
     .bind("127.0.0.1:8080")?
