@@ -7,81 +7,16 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::models::user::{User, UserResponse};
-use crate::responses::user_responses::{GenericResponse, SingleUserReponse, UserData, UserListResponse};
+use crate::responses::user_responses::{SingleUserReponse, UserData, UserListResponse};
+use crate::responses::generic_responses::GenericResponse;
+use crate::utils::enums::Status;
+
 
 #[derive(Deserialize)]
 pub struct CreateUserRequest {
     email: String,
     password: String,
 }
-
-pub async fn create_user(
-    session: web::Data<Arc<Mutex<Session>>>,
-    user: web::Json<CreateUserRequest>
-) -> impl Responder {
-    let session_clone = Arc::clone(&session);
-    let fetch_response = fetch_users(session_clone).await;
-
-    if let Err(e) = fetch_response {
-        let response = GenericResponse {
-            status: "fail".to_string(),
-            message: e.to_string()
-        };
-        return HttpResponse::InternalServerError().json(response);
-    }
-    let users = fetch_response.unwrap();
-    if users.iter().any(|u| u.email == user.email) {
-        let response = GenericResponse {
-            status: "fail".to_string(),
-            message: format!("Account with email: {} already exists", user.email)
-        };
-        return HttpResponse::Conflict().json(response);
-    }
-    let hashed_password = hash(&user.password, DEFAULT_COST).unwrap();
-    let user = User {
-        id: uuid::Uuid::new_v4().to_string(),
-        email: user.email.clone(),
-        password: hashed_password,
-    };
-
-    let query = format!(
-        "INSERT INTO tutorial.users (id, email, password) VALUES ('{}', '{}', '{}')",
-        user.id, user.email, user.password
-    );
-
-    let session = session.lock().await;
-    session.query(query, &[]).await.expect("Failed to insert user");
-
-    let response = SingleUserReponse {
-        status: "success".to_string(),
-        data: UserData { user: user.to_user_reponse() }
-    };
-    HttpResponse::Created().json(response)
-}
-
-
-pub async fn get_users(session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
-    let session_clone = Arc::clone(&session);
-    let fetch_response = fetch_users(session_clone).await;
-    match fetch_response {
-        Ok(users) => {
-            let response = UserListResponse {
-                status: "sucess".to_string(),
-                count: users.len(),
-                users: users,
-            };
-            HttpResponse::Ok().json(response)
-        },
-        Err(e) => {
-            let response = GenericResponse {
-                status: "fail".to_string(),
-                message: e.to_string()
-            };
-            HttpResponse::InternalServerError().json(response)
-        }
-    }
-}
-
 
 async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserResponse>, QueryError> {
     let query = format!("SELECT id, email FROM tutorial.users");
@@ -102,6 +37,98 @@ async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserRespon
         },
         Err(e) => {
             Err(e)
+        }
+    }
+}
+
+pub async fn create_user(
+    session: web::Data<Arc<Mutex<Session>>>,
+    user: web::Json<CreateUserRequest>
+) -> impl Responder {
+    let session_clone = Arc::clone(&session);
+    let fetch_response = fetch_users(session_clone).await;
+
+    if let Err(e) = fetch_response {
+        let response = GenericResponse::new(
+            Status::Success,
+            e.to_string()
+        );
+        return HttpResponse::InternalServerError().json(response);
+    }
+    let users = fetch_response.unwrap();
+    if users.iter().any(|u| u.email == user.email) {
+        let response = GenericResponse::new(
+            Status::Fail,
+            format!("Account with email: {} already exists", user.email)
+        );
+        return HttpResponse::Conflict().json(response);
+    }
+    let hashed_password = hash(&user.password, DEFAULT_COST).unwrap();
+    let user = User {
+        id: uuid::Uuid::new_v4().to_string(),
+        email: user.email.clone(),
+        password: hashed_password,
+    };
+
+    let query = format!(
+        "INSERT INTO tutorial.users (id, email, password) VALUES ('{}', '{}', '{}')",
+        user.id, user.email, user.password
+    );
+
+    let session = session.lock().await;
+    session.query(query, &[]).await.expect("Failed to insert user");
+
+    let response = SingleUserReponse::new(
+        Status::Success,
+        UserData { user: user.to_user_reponse() }
+    );
+    HttpResponse::Created().json(response)
+}
+
+
+pub async fn get_users(session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
+    let session_clone = Arc::clone(&session);
+    let fetch_response = fetch_users(session_clone).await;
+    match fetch_response {
+        Ok(users) => {
+            let response = UserListResponse::new(
+                Status::Success,
+                users.len(),
+                users,
+            );
+            HttpResponse::Ok().json(response)
+        },
+        Err(e) => {
+            let response = GenericResponse::new(
+                Status::Fail,
+                e.to_string()
+            );
+            HttpResponse::InternalServerError().json(response)
+        }
+    }
+}
+
+pub async fn delete_user(path: web::Path<String>, session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
+    let id = path.into_inner();
+    let session = session.lock().await;
+
+    let query = format!("DELETE FROM tutorial.users WHERE id = '{}';", id);
+
+    let result = session.query(query, &[]).await;
+    match result {
+        Ok(_) => {
+            let response = GenericResponse::new(
+                Status::Success, 
+            "User has been deleted".to_string()
+            );
+            HttpResponse::Ok().json(response)
+        },
+        Err(e) => {
+            let response = GenericResponse::new(
+                Status::Fail, 
+                e.to_string()
+            );
+            HttpResponse::NotFound().json(response)
         }
     }
 }

@@ -7,6 +7,7 @@ mod config;
 mod handlers;
 mod responses;
 mod models;
+mod utils;
 
 
 #[actix_web::main]
