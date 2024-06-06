@@ -18,6 +18,12 @@ pub struct CreateUserRequest {
     password: String,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateUserRequest {
+    email: Option<String>,
+
+}
+
 async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserResponse>, QueryError> {
     let query = format!("SELECT id, email FROM tutorial.users");
 
@@ -68,7 +74,7 @@ async fn fetch_user(session: Arc<Arc<Mutex<Session>>>, id: String) -> Result<Use
 
 pub async fn create_user(
     session: web::Data<Arc<Mutex<Session>>>,
-    user: web::Json<CreateUserRequest>
+    body: web::Json<CreateUserRequest>
 ) -> impl Responder {
     let session_clone = Arc::clone(&session);
     let fetch_response = fetch_users(session_clone).await;
@@ -81,17 +87,17 @@ pub async fn create_user(
         return HttpResponse::InternalServerError().json(response);
     }
     let users = fetch_response.unwrap();
-    if users.iter().any(|u| u.email == user.email) {
+    if users.iter().any(|u| u.email == body.email) {
         let response = GenericResponse::new(
             Status::Fail,
-            format!("Account with email: {} already exists", user.email)
+            format!("Account with email: {} already exists", body.email)
         );
         return HttpResponse::Conflict().json(response);
     }
-    let hashed_password = hash(&user.password, DEFAULT_COST).unwrap();
+    let hashed_password = hash(&body.password, DEFAULT_COST).unwrap();
     let user = User {
         id: uuid::Uuid::new_v4().to_string(),
-        email: user.email.clone(),
+        email: body.email.clone(),
         password: hashed_password,
     };
 
@@ -151,6 +157,46 @@ pub async fn get_user(path: web::Path<String>, session: web::Data<Arc<Mutex<Sess
             );
             if let QueryError::BadQuery(_) = e {
                 return HttpResponse::NotFound().json(response)
+            }
+            HttpResponse::InternalServerError().json(response)
+        }
+    }
+}
+
+pub async fn update_user(path: web::Path<String>, body: web::Json<UpdateUserRequest>, session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
+    let id = path.into_inner();
+    let session_clone = Arc::clone(&session);
+    let fetch_response = fetch_user(session_clone, id.to_owned()).await;
+    match fetch_response {
+        Ok(user) => {
+            let email = body.email.as_ref().unwrap_or(&user.email);
+            let session = session.lock().await;
+            let query = format!("UPDATE tutorial.users SET email = '{}' WHERE id = '{}';", email, id);
+            let update = session.query(query, &[]).await;
+            match update {
+                Ok(_) => {
+                    let response = SingleUserReponse::new(
+                        Status::Success,
+                        UserResponse{ id: user.id, email: email.to_owned() }
+                    );
+                    return HttpResponse::Ok().json(response)
+                },
+                Err(e) => {
+                    let response = GenericResponse::new(
+                        Status::Fail,
+                        e.to_string()
+                    );
+                    return HttpResponse::InternalServerError().json(response)
+                }
+            }
+        },
+        Err(e) => {
+            let response = GenericResponse::new(
+                Status::Fail,
+                e.to_string()
+            );
+            if let QueryError::BadQuery(_) = e {
+                return HttpResponse::NotFound().json(response);
             }
             HttpResponse::InternalServerError().json(response)
         }
