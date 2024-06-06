@@ -4,14 +4,9 @@ use crate::{models::user::UserResponse, utils::enums::Status};
 
 
 #[derive(Serialize)]
-pub struct UserData {
-	pub user: UserResponse
-}
-
-#[derive(Serialize)]
 pub struct SingleUserReponse {
 	pub status: String,
-	pub data: UserData,
+	pub user: UserResponse,
 }
 
 #[derive(Serialize)]
@@ -23,10 +18,10 @@ pub struct UserListResponse {
 }
 
 impl SingleUserReponse {
-	pub fn new(status: Status, data: UserData) -> SingleUserReponse {
+	pub fn new(status: Status, user: UserResponse) -> SingleUserReponse {
 		SingleUserReponse {
 			status: status.to_string(),
-			data
+			user
 		}
 	}
 }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::models::user::{User, UserResponse};
-use crate::responses::user_responses::{SingleUserReponse, UserData, UserListResponse};
+use crate::responses::user_responses::{SingleUserReponse, UserListResponse};
 use crate::responses::generic_responses::GenericResponse;
 use crate::utils::enums::Status;
 
@@ -34,6 +34,27 @@ async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserRespon
                 users.push(UserResponse { id: id.to_owned(), email: email.to_owned()});
             }
             Ok(users)
+        },
+        Err(e) => {
+            Err(e)
+        }
+    }
+}
+
+async fn fetch_user(session: Arc<Arc<Mutex<Session>>>, id: String) -> Result<User, QueryError> {
+    let query = format!("SELECT id, email, password FROM tutorial.users WHERE id = '{}'", id);
+
+    let session = session.lock().await;
+    let result = session.query(query, &[]).await;
+
+    match result {
+        Ok(response) => {
+            let rows = response.rows.unwrap_or_default();
+            let id = rows[0].columns[0].as_ref().unwrap().as_text().unwrap();
+            let email = rows[0].columns[1].as_ref().unwrap().as_text().unwrap();
+            let password = rows[0].columns[2].as_ref().unwrap().as_text().unwrap();
+            let user = User { id: id.to_owned(), email: email.to_owned(), password: password.to_owned() };
+            Ok(user)
         },
         Err(e) => {
             Err(e)
@@ -80,7 +101,7 @@ pub async fn create_user(
 
     let response = SingleUserReponse::new(
         Status::Success,
-        UserData { user: user.to_user_reponse() }
+        UserResponse{ id: user.id, email: user.email }
     );
     HttpResponse::Created().json(response)
 }
@@ -95,6 +116,27 @@ pub async fn get_users(session: web::Data<Arc<Mutex<Session>>>) -> impl Responde
                 Status::Success,
                 users.len(),
                 users,
+            );
+            HttpResponse::Ok().json(response)
+        },
+        Err(e) => {
+            let response = GenericResponse::new(
+                Status::Fail,
+                e.to_string()
+            );
+            HttpResponse::InternalServerError().json(response)
+        }
+    }
+}
+
+pub async fn get_user(path: web::Path<String>, session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
+    let session_clone = Arc::clone(&session);
+    let fetch_response = fetch_user(session_clone, path.into_inner()).await;
+    match fetch_response {
+        Ok(user) => {
+            let response = SingleUserReponse::new(
+                Status::Success,
+                UserResponse{ id: user.id, email: user.email }
             );
             HttpResponse::Ok().json(response)
         },
