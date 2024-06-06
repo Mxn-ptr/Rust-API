@@ -1,5 +1,5 @@
 use actix_web::{web, HttpResponse, Responder};
-use scylla::transport::errors::QueryError;
+use scylla::transport::errors::{BadQuery, QueryError};
 use serde::Deserialize;
 use scylla::Session;
 use bcrypt::{hash, DEFAULT_COST};
@@ -50,11 +50,15 @@ async fn fetch_user(session: Arc<Arc<Mutex<Session>>>, id: String) -> Result<Use
     match result {
         Ok(response) => {
             let rows = response.rows.unwrap_or_default();
-            let id = rows[0].columns[0].as_ref().unwrap().as_text().unwrap();
-            let email = rows[0].columns[1].as_ref().unwrap().as_text().unwrap();
-            let password = rows[0].columns[2].as_ref().unwrap().as_text().unwrap();
-            let user = User { id: id.to_owned(), email: email.to_owned(), password: password.to_owned() };
-            Ok(user)
+            if rows.is_empty() {
+                Err(QueryError::BadQuery(BadQuery::Other(format!("User with id: {} not found", id))))
+            } else {
+                let id = rows[0].columns[0].as_ref().unwrap().as_text().unwrap();
+                let email = rows[0].columns[1].as_ref().unwrap().as_text().unwrap();
+                let password = rows[0].columns[2].as_ref().unwrap().as_text().unwrap();
+                let user = User { id: id.to_owned(), email: email.to_owned(), password: password.to_owned() };
+                Ok(user)
+            }
         },
         Err(e) => {
             Err(e)
@@ -145,6 +149,9 @@ pub async fn get_user(path: web::Path<String>, session: web::Data<Arc<Mutex<Sess
                 Status::Fail,
                 e.to_string()
             );
+            if let QueryError::BadQuery(_) = e {
+                return HttpResponse::NotFound().json(response)
+            }
             HttpResponse::InternalServerError().json(response)
         }
     }
