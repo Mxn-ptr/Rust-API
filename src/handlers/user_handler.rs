@@ -19,6 +19,11 @@ pub struct UserRequest {
 }
 
 #[derive(Deserialize)]
+pub struct PasswordRequest {
+    password: String,
+}
+
+#[derive(Deserialize)]
 pub struct UpdateUserRequest {
     email: Option<String>,
 
@@ -161,6 +166,34 @@ pub async fn login(body: web::Json<UserRequest>, session: web::Data<Arc<Mutex<Se
             e.to_string()
             );
             HttpResponse::InternalServerError().json(response)
+        }
+    }
+}
+
+pub async fn reset_password(path: web::Path<String>, body: web::Json<PasswordRequest>, session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
+    let id = path.into_inner();
+    let session = session.lock().await;
+    let hashed_password = hash(&body.password, DEFAULT_COST).unwrap();
+    let query = format!("UPDATE first_db.users SET password = '{}' WHERE id = '{}' IF EXISTS;", hashed_password, id);
+    let query_result = session.query(query, &[]).await;
+    match query_result {
+        Ok(result) => {
+            if result.rows.unwrap()[0].columns[0].as_ref().unwrap().as_boolean().unwrap() == true {
+                let response = GenericResponse::new(
+                    Status::Success,
+                    "Password has been updated".to_string()
+                );
+                HttpResponse::Ok().json(response)
+            } else {
+                let response = GenericResponse::new(
+                    Status::Fail,
+                    "User not found".to_string()
+                );
+                HttpResponse::BadRequest().json(response)
+            }
+        },
+        Err(e) => {
+            HttpResponse::BadRequest().json(e.to_string())
         }
     }
 }
