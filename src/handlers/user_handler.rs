@@ -2,7 +2,7 @@ use actix_web::{web, HttpResponse, Responder};
 use scylla::transport::errors::{BadQuery, QueryError};
 use serde::Deserialize;
 use scylla::Session;
-use bcrypt::{hash, DEFAULT_COST};
+use bcrypt::{hash, verify, DEFAULT_COST};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -13,7 +13,7 @@ use crate::utils::enums::Status;
 
 
 #[derive(Deserialize)]
-pub struct CreateUserRequest {
+pub struct UserRequest {
     email: String,
     password: String,
 }
@@ -25,7 +25,7 @@ pub struct UpdateUserRequest {
 }
 
 async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserResponse>, QueryError> {
-    let query = format!("SELECT id, email FROM tutorial.users");
+    let query = format!("SELECT id, email FROM first_db.users");
 
     let session = session.lock().await;
     let result = session.query(query, &[]).await;
@@ -48,7 +48,7 @@ async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserRespon
 }
 
 async fn fetch_user(session: Arc<Arc<Mutex<Session>>>, id: String) -> Result<User, QueryError> {
-    let query = format!("SELECT id, email, password FROM tutorial.users WHERE id = '{}'", id);
+    let query = format!("SELECT id, email, password FROM first_db.users WHERE id = '{}'", id);
 
     let session = session.lock().await;
     let result = session.query(query, &[]).await;
@@ -74,7 +74,7 @@ async fn fetch_user(session: Arc<Arc<Mutex<Session>>>, id: String) -> Result<Use
 
 pub async fn create_user(
     session: web::Data<Arc<Mutex<Session>>>,
-    body: web::Json<CreateUserRequest>
+    body: web::Json<UserRequest>
 ) -> impl Responder {
     let session_clone = Arc::clone(&session);
     let fetch_response = fetch_users(session_clone).await;
@@ -102,7 +102,7 @@ pub async fn create_user(
     };
 
     let query = format!(
-        "INSERT INTO tutorial.users (id, email, password) VALUES ('{}', '{}', '{}')",
+        "INSERT INTO first_db.users (id, email, password) VALUES ('{}', '{}', '{}')",
         user.id, user.email, user.password
     );
 
@@ -116,6 +116,54 @@ pub async fn create_user(
     HttpResponse::Created().json(response)
 }
 
+pub async fn login(body: web::Json<UserRequest>, session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
+    let session = session.lock().await;
+    let query = format!("SELECT * FROM first_db.users WHERE email = '{}';", body.email);
+    let fetch_user = session.query(query, &[]).await;
+    match fetch_user {
+        Ok(user) => {
+            let wrong_response = GenericResponse::new(
+                Status::Fail,
+                "Wrong credentials".to_string()
+                );
+            let rows = user.rows.unwrap_or_default();
+            if rows.is_empty() {
+                return HttpResponse::Unauthorized().json(wrong_response)
+            }
+            let id = rows[0].columns[0].as_ref().unwrap().as_text().unwrap();
+            let email = rows[0].columns[1].as_ref().unwrap().as_text().unwrap();
+            let password = rows[0].columns[2].as_ref().unwrap().as_text().unwrap();
+            let verify = verify(&body.password, &password);
+            match verify {
+                Ok(result) => {
+                    if result == false {
+                        HttpResponse::Unauthorized().json(wrong_response)
+                    } else {
+                        let response = SingleUserReponse::new(
+                            Status::Success,
+                            UserResponse { id: id.to_owned(), email: email.to_owned() }
+                        );
+                        HttpResponse::Ok().json(response)
+                    }
+                },
+                Err(e) => {
+                    let response = GenericResponse::new(
+                        Status::Fail,
+                        e.to_string()
+                    );
+                    HttpResponse::InternalServerError().json(response)
+                }
+            }
+        },
+        Err(e) => {
+            let response = GenericResponse::new(
+                Status::Fail,
+            e.to_string()
+            );
+            HttpResponse::InternalServerError().json(response)
+        }
+    }
+}
 
 pub async fn get_users(session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
     let session_clone = Arc::clone(&session);
@@ -171,7 +219,7 @@ pub async fn update_user(path: web::Path<String>, body: web::Json<UpdateUserRequ
         Ok(user) => {
             let email = body.email.as_ref().unwrap_or(&user.email);
             let session = session.lock().await;
-            let query = format!("UPDATE tutorial.users SET email = '{}' WHERE id = '{}';", email, id);
+            let query = format!("UPDATE first_db.users SET email = '{}' WHERE id = '{}';", email, id);
             let update = session.query(query, &[]).await;
             match update {
                 Ok(_) => {
@@ -207,7 +255,7 @@ pub async fn delete_user(path: web::Path<String>, session: web::Data<Arc<Mutex<S
     let id = path.into_inner();
     let session = session.lock().await;
 
-    let query = format!("DELETE FROM tutorial.users WHERE id = '{}';", id);
+    let query = format!("DELETE FROM first_db.users WHERE id = '{}';", id);
 
     let result = session.query(query, &[]).await;
     match result {
