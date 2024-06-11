@@ -13,6 +13,14 @@ pub async fn create_session() -> DbSession {
     .await
     .expect("Failed to connected to ScyllaDB");
     println!("Connecting to database");
+    let mut query = "CREATE KEYSPACE IF NOT EXISTS rustdb WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};";
+    session.query(query, &[]).await.expect("Failed to create keypace");
+    query = "CREATE TABLE IF NOT EXISTS rustdb.users (id text PRIMARY KEY, email text, password text);";
+    session.query(query, &[]).await.expect("Failed to create table");
+    query = "CREATE INDEX IF NOT EXISTS user_email ON rustdb.users (email);";
+    session.query(query, &[]).await.expect("Failed to create index");
+    println!("Database initialized");
+
     
     Data::new(Arc::new(Mutex::new(session)))
 }

@@ -30,7 +30,7 @@ pub struct UpdateUserRequest {
 }
 
 async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserResponse>, QueryError> {
-    let query = format!("SELECT id, email FROM first_db.users");
+    let query = format!("SELECT id, email FROM rustdb.users");
 
     let session = session.lock().await;
     let result = session.query(query, &[]).await;
@@ -53,7 +53,7 @@ async fn fetch_users(session: Arc<Arc<Mutex<Session>>>) -> Result<Vec<UserRespon
 }
 
 async fn fetch_user(session: Arc<Arc<Mutex<Session>>>, id: String) -> Result<User, QueryError> {
-    let query = format!("SELECT id, email, password FROM first_db.users WHERE id = '{}'", id);
+    let query = format!("SELECT id, email, password FROM rustdb.users WHERE id = '{}'", id);
 
     let session = session.lock().await;
     let result = session.query(query, &[]).await;
@@ -107,7 +107,7 @@ pub async fn create_user(
     };
 
     let query = format!(
-        "INSERT INTO first_db.users (id, email, password) VALUES ('{}', '{}', '{}')",
+        "INSERT INTO rustdb.users (id, email, password) VALUES ('{}', '{}', '{}')",
         user.id, user.email, user.password
     );
 
@@ -123,7 +123,7 @@ pub async fn create_user(
 
 pub async fn login(body: web::Json<UserRequest>, session: web::Data<Arc<Mutex<Session>>>) -> impl Responder {
     let session = session.lock().await;
-    let query = format!("SELECT * FROM first_db.users WHERE email = '{}';", body.email);
+    let query = format!("SELECT * FROM rustdb.users WHERE email = '{}';", body.email);
     let fetch_user = session.query(query, &[]).await;
     match fetch_user {
         Ok(user) => {
@@ -174,7 +174,7 @@ pub async fn reset_password(path: web::Path<String>, body: web::Json<PasswordReq
     let id = path.into_inner();
     let session = session.lock().await;
     let hashed_password = hash(&body.password, DEFAULT_COST).unwrap();
-    let query = format!("UPDATE first_db.users SET password = '{}' WHERE id = '{}' IF EXISTS;", hashed_password, id);
+    let query = format!("UPDATE rustdb.users SET password = '{}' WHERE id = '{}' IF EXISTS;", hashed_password, id);
     let query_result = session.query(query, &[]).await;
     match query_result {
         Ok(result) => {
@@ -252,7 +252,7 @@ pub async fn update_user(path: web::Path<String>, body: web::Json<UpdateUserRequ
         Ok(user) => {
             let email = body.email.as_ref().unwrap_or(&user.email);
             let session = session.lock().await;
-            let query = format!("UPDATE first_db.users SET email = '{}' WHERE id = '{}';", email, id);
+            let query = format!("UPDATE rustdb.users SET email = '{}' WHERE id = '{}';", email, id);
             let update = session.query(query, &[]).await;
             match update {
                 Ok(_) => {
@@ -288,7 +288,7 @@ pub async fn delete_user(path: web::Path<String>, session: web::Data<Arc<Mutex<S
     let id = path.into_inner();
     let session = session.lock().await;
 
-    let query = format!("DELETE FROM first_db.users WHERE id = '{}';", id);
+    let query = format!("DELETE FROM rustdb.users WHERE id = '{}';", id);
 
     let result = session.query(query, &[]).await;
     match result {
