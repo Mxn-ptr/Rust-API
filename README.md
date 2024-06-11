@@ -57,18 +57,15 @@ Clone the repository:
           "password": "securepassword"
       }
       ```
-	<br>
 
 - ### **Get All Users**
     - **URL:** `/users`
     - **Method:** `GET`
-	<br><br>
 
 
 - ### **Get User by ID**
     - **URL:** `/users/{id}`
     - **Method:** `GET`
-	<br><br>
 
 - ### **Login**
 	- **URL:** `/users/login`
@@ -80,7 +77,6 @@ Clone the repository:
           "password": "securepassword"
       }
       ```
-	<br>
 
 - ### **Update Email**
 	- **URL:** `/users/{id}`
@@ -91,7 +87,6 @@ Clone the repository:
 			"email": "user@example.com"
 		}
 		```
-	<br>
 	
 - ### **Reset Password**
 	- **URL:** `/users/reset_password/{id}`
@@ -102,12 +97,10 @@ Clone the repository:
 			"password": "new_password"
 		}
 		```
-	<br>
 
 - ### **Delete User**
     - **URL:** `/users/{id}`
     - **Method:** `DELETE`
-	<br><br>
 
 **Feel free to use import the following collection to test endpoints with Postman : [Rust API Collection](Rust-API.postman_collection.json)**
 
